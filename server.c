@@ -26,7 +26,9 @@ int main(void){
   address.sin_addr.s_addr = INADDR_ANY; //0.0.0.0 (accept connections from any IP address)
   address.sin_port = htons(PORT); //Assigned PORT formatted properly such that it can be read(big endian format)
 
-
+  //To avoid os wait time regarding server port usage
+  int opt = 1;
+  setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
   //Bind socket to port
   if(bind(server_fd,(struct sockaddr *) &address,addrlen)<0){ 
@@ -52,9 +54,34 @@ int main(void){
 
   printf("Client Connected!!\n");
 
+  char buffer[2048];
+  //Read client's message
+  int bytes_read = read(client_socket,buffer,sizeof(buffer));
 
-  //Respond
-  char *message = "Welcome to the server\n";
+  if(bytes_read<0){
+    perror("Read");
+    exit(EXIT_FAILURE);
+  }
+
+  buffer[bytes_read] = '\0';
+  printf("%s\n",buffer);
+
+  char* http = strtok(buffer,"\r\n");// get the METHOD /PATH HTTPVERSION line
+  if(http!=NULL){
+    char* method = strtok(http," ");//split at space
+    char* path = strtok(NULL," ");//split at space again , NULL = CONTINUE
+    printf("Method : %s\n",method);
+    printf("Path : %s\n",path);
+
+  }
+  
+
+  //Respond with HTTP [STATUS] [HEADER] [BODY]
+  char *message = 
+  "HTTP/1.1 200 OK\r\n"
+  "Content-Type: text/plain\r\n"
+  "\r\n"
+  "Welcome to the server";
   send(client_socket,message,strlen(message),0);// 0 => flags , no special behaviour
 
   //Close sockets
