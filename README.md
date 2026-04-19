@@ -107,18 +107,18 @@ http://localhost:8080
 * Handling multiple clients simultaneously
 * Structuring C projects into modular components
 * Writing build systems using Makefiles
+* Support for POST requests
+* Better HTTP parsing (headers, query params)
+* HTTP/1.1 persistent connections (keep-alive)
 
 ---
 
 ## Future Improvements
 
-* Support for POST requests
-* Better HTTP parsing (headers, query params)
 * Thread-based concurrency (pthreads)
 * Logging to file instead of stdout
 * Security improvements (path sanitization)
 * Support for large file streaming
-* HTTP/1.1 persistent connections (keep-alive)
 
 ---
 
