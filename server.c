@@ -67,23 +67,51 @@ int main(void){
   printf("%s\n",buffer);
 
   char* http = strtok(buffer,"\r\n");// get the METHOD /PATH HTTPVERSION line
+  char* method;
+  char* path;
+
   if(http!=NULL){
-    char* method = strtok(http," ");//split at space
-    char* path = strtok(NULL," ");//split at space again , NULL = CONTINUE
+    method = strtok(http," ");//split at space
+    path = strtok(NULL," ");//split at space again , NULL = CONTINUE
     printf("Method : %s\n",method);
     printf("Path : %s\n",path);
-
   }
   
-
   //Respond with HTTP [STATUS] [HEADER] [BODY]
-  char *message = 
-  "HTTP/1.1 200 OK\r\n"
-  "Content-Type: text/plain\r\n"
-  "\r\n"
-  "Welcome to the server";
-  send(client_socket,message,strlen(message),0);// 0 => flags , no special behaviour
+  char response[16384];
 
+  if(strcmp(path,"/")==0){
+    //Open html file and serve it
+    FILE *file = fopen("index.html","r");
+    if(file==NULL){
+      perror("File open failed");
+      exit(EXIT_FAILURE);
+    }
+
+    char file_buffer[8192];
+    int bytes = fread(file_buffer,1,sizeof(file_buffer),file);
+    file_buffer[bytes] = '\0';
+    fclose(file);
+    //return HTML page
+    sprintf(response,
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "\r\n"
+    "%s"
+    ,file_buffer);
+  }
+  else{
+    sprintf(response,
+    "HTTP/1.1 404 Not Found\r\n"
+    "Content-Type: text/plain\r\n"
+    "\r\n"
+    "Page not found");
+  }
+
+  send(client_socket,response,strlen(response),0);// 0 => flags , no special behaviour
+
+  //File testing
+  
   //Close sockets
   close(client_socket);
   close(server_fd);
