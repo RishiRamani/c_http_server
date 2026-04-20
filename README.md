@@ -234,6 +234,9 @@ http://localhost:8080/
 ```
 
 ---
+<img width="1843" height="909" alt="image" src="https://github.com/user-attachments/assets/364dc61e-b6e6-45db-92d4-d5a377d99ed3" />
+
+---
 
 ## ⚙️ Technical Highlights
 
