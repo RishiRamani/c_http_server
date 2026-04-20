@@ -326,6 +326,144 @@ void handle_request(int client_socket){
           ,status_code,strlen("Invalid Post Route"),conn_header);
       }
     }
+    //DELETE check
+    else if(method!=NULL && strcmp(method,"DELETE")==0){
+      if(path!=NULL && strncmp(path,"/data",5)==0){
+        char* id = strstr(path,"?id=");
+        if(id!=NULL){
+          id+=4;
+          int ID = atoi(id);
+          int foundid = -1;
+          pthread_mutex_lock(&lock);
+          //Simple search due to small storage
+          for(int i=0;i<total_data;i++){
+            if(storage[i].id==ID){
+              foundid = i;
+              break;
+            }
+          }
+          if(foundid==-1){
+            status_code=404;
+            sprintf(response,
+            "HTTP/1.1 %d Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "Item Not Found"
+            ,status_code,strlen("Item Not Found"),conn_header);
+          }
+          else{
+            //removal of data and compaction
+            for(int i=foundid;i<total_data-1;i++){
+              storage[i]=storage[i+1];
+            }
+            total_data--;
+            status_code=204;
+            sprintf(response,
+            "HTTP/1.1 %d No Content\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 0\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            ,status_code,conn_header);
+          }
+          pthread_mutex_unlock(&lock);
+        }
+        else{
+          //deleteall
+          pthread_mutex_lock(&lock);
+          total_data=0;
+          pthread_mutex_unlock(&lock);
+          status_code=204;
+          sprintf(response,
+          "HTTP/1.1 %d No Content\r\n"
+          "Content-Type: text/plain\r\n"
+          "Content-Length: 0\r\n"
+          "Connection: %s\r\n"
+          "\r\n"
+          ,status_code,conn_header);
+        }
+      }
+      
+      else{
+        status_code=404;
+        sprintf(response,
+        "HTTP/1.1 %d Not Found\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: %s\r\n"
+        "\r\n"
+        "Page not found"
+        ,status_code,strlen("Page not found"),conn_header);
+      }
+    }
+    //PUT check
+    else if(method!=NULL && strcmp(method,"PUT")==0){
+      if(path!=NULL && strncmp(path,"/data",5)==0){
+        char* id = strstr(path,"?id=");
+        if(id!=NULL){
+          id+=4;
+          int ID = atoi(id);
+          int foundid = -1;
+          pthread_mutex_lock(&lock);
+          //Simple search due to small storage
+          for(int i=0;i<total_data;i++){
+            if(storage[i].id==ID){
+              foundid = i;
+              break;
+            }
+          }
+          if(foundid==-1){
+            status_code=404;
+            sprintf(response,
+            "HTTP/1.1 %d Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "Item Not Found"
+            ,status_code,strlen("Item Not Found"),conn_header);
+          }
+          else{
+            //updation
+            strcpy(storage[foundid].data,post_data);
+            status_code=200;
+            char body[512];
+            sprintf(body,"Item with ID : %d updated",ID);
+            sprintf(response,
+            "HTTP/1.1 %d OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "%s"
+            ,status_code,strlen(body),conn_header,body);
+          }
+          pthread_mutex_unlock(&lock);
+        }else{
+          status_code=400;
+          sprintf(response,
+          "HTTP/1.1 %d Bad Request\r\n"
+          "Content-Type: text/plain\r\n"
+          "Content-Length: %zu\r\n"
+          "Connection: %s\r\n"
+          "\r\n"
+          "The ID Field is Required"
+          ,status_code,strlen("The ID Field is Required"),conn_header);
+        }
+      }else{
+        status_code=404;
+        sprintf(response,
+        "HTTP/1.1 %d Not Found\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: %s\r\n"
+        "\r\n"
+        "Page not found"
+        ,status_code,strlen("Page not found"),conn_header);
+      }
+    }
     else{
       sprintf(response,
         "HTTP/1.1 405 Method Not Allowed\r\n"

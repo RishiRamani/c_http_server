@@ -1,14 +1,62 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Welcome To My Server Built in C</title>
-    <link rel="stylesheet" href="/style.css">
-  </head>
-  <body>
-    <h1>This server was built in C</h1>
-    <p>Thank you for testing my project out!.
-      This project helped me learn a lot about web servers which I had already worked on using MERN but this just felt different,
-       it gave me a solid foundation on what actually goes on and made me understand the core of the Internet.</p>
-    <script src="/script.js"></script>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>C HTTP Server Tester</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/favicon.ico">
+</head>
+<body>
+
+  <h1>C HTTP Server Tester</h1>
+
+  <section>
+    <h2>Available Endpoints</h2>
+    <ul>
+      <li>POST /submit → Add data</li>
+      <li>GET /data → Get all data</li>
+      <li>GET /data?id=ID → Get specific item</li>
+      <li>PUT /data?id=ID → Update item</li>
+      <li>DELETE /data?id=ID → Delete item</li>
+      <li>DELETE /data → Delete all data</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Create (POST)</h2>
+    <input type="text" id="postInput" placeholder="Enter data">
+    <button onclick="sendPost()">Submit</button>
+  </section>
+
+  <section>
+    <h2>Read (GET)</h2>
+    <button onclick="getAll()">Get All</button>
+  </section>
+
+  <section>
+    <h2>Read by ID</h2>
+    <input type="number" id="getId" placeholder="Enter ID">
+    <button onclick="getById()">Get</button>
+  </section>
+
+  <section>
+    <h2>Update (PUT)</h2>
+    <input type="number" id="putId" placeholder="ID">
+    <input type="text" id="putData" placeholder="New data">
+    <button onclick="updateData()">Update</button>
+  </section>
+
+  <section>
+    <h2>Delete</h2>
+    <input type="number" id="deleteId" placeholder="ID (optional)">
+    <button onclick="deleteData()">Delete</button>
+  </section>
+
+  <section>
+    <h2>Response</h2>
+    <pre id="output"></pre>
+  </section>
+
+  <script src="script.js"></script>
+</body>
 </html>
