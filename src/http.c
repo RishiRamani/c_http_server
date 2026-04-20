@@ -5,10 +5,33 @@
 #include "http.h"
 #include "utils.h"
 #include <arpa/inet.h>
+#include <pthread.h>
+
+#define STORAGE_SIZE 100
+
+struct User{
+  int id;
+  char data[256];
+};
+
+int total_data = 0;
+int next_id = 1;
+
+struct User storage[STORAGE_SIZE];
+
+//Mutex
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+
+//To handle binary files , toggling btw sending header seperately and not
+int file=0;
 
 void handle_request(int client_socket){
   char buffer[2048];  
   char post_data[2048];
+  long file_size = 0;
+  char *file_buffer = NULL;
+
   while(1){
     //Connection alive or dead
     int keep_alive = 1;
@@ -105,9 +128,76 @@ void handle_request(int client_socket){
     char response[16384];
     int status_code;
     char* conn_header = keep_alive ? "keep-alive" : "close";
-
+    file = 0;
     if(method!=NULL && strcmp(method,"GET")==0){
-      if(path!=NULL && strcmp(path,"/")==0){
+      //check for API
+      if(path!=NULL && strncmp(path,"/data",5)==0){
+        char* id = strstr(path,"?id=");
+        if(id!=NULL){
+          id+=4;
+          int ID = atoi(id);
+          int foundid = -1;
+          pthread_mutex_lock(&lock);
+          //Simple search due to small storage
+          for(int i=0;i<total_data;i++){
+            if(storage[i].id==ID){
+              foundid = i;
+              break;
+            }
+          }
+          pthread_mutex_unlock(&lock);
+          if(foundid==-1){
+            status_code=404;
+            sprintf(response,
+            "HTTP/1.1 %d Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "Item Not Found"
+            ,status_code,strlen("Item Not Found"),conn_header);
+          }
+          else{
+            status_code=200;
+            char body[512];
+            pthread_mutex_lock(&lock);
+            sprintf(body,"%d : %s",storage[foundid].id,storage[foundid].data);
+            pthread_mutex_unlock(&lock);
+            sprintf(response,
+            "HTTP/1.1 %d OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "%s"
+            ,status_code,strlen(body),conn_header,body);
+          }
+        }else{
+          status_code=200;
+          char body[8192] ="";
+          pthread_mutex_lock(&lock);
+          if(total_data==0){
+            sprintf(body,"No data available");
+          }
+          else{
+            for(int i=0;i<total_data;i++){
+              char line[512];
+              sprintf(line,"%d : %s\n",storage[i].id,storage[i].data);
+              strcat(body,line);
+            }
+          }
+          pthread_mutex_unlock(&lock);
+          sprintf(response,
+          "HTTP/1.1 %d OK\r\n"
+          "Content-Type: text/plain\r\n"
+          "Content-Length: %zu\r\n"
+          "Connection: %s\r\n"
+          "\r\n"
+          "%s"
+          ,status_code,strlen(body),conn_header,body);
+        }
+      }else{
+        if(path!=NULL && strcmp(path,"/")==0){
         //Open html file and serve it
         FILE *file = fopen("public/index.html","r");
 
@@ -134,11 +224,11 @@ void handle_request(int client_socket){
           sprintf(response,
           "HTTP/1.1 %d OK\r\n"
           "Content-Type: text/html\r\n"
-          "Content-Length: %zu\r\n"
+          "Content-Length: %d\r\n"
           "Connection: %s\r\n"
           "\r\n"
           "%s"
-          ,status_code,strlen(file_buffer),conn_header,file_buffer);
+          ,status_code,bytes,conn_header,file_buffer);
         }
       }
       else{
@@ -150,11 +240,9 @@ void handle_request(int client_socket){
         char full_path[256];
         sprintf(full_path,"public/%s",filename);
 
-        char * content_type = get_content_type(filename);
+        FILE *fp = fopen(full_path,"rb");
 
-        FILE *file = fopen(full_path,"r");
-
-        if(file==NULL){
+        if(fp==NULL){
           status_code=404;
           //filename not in server so return page not found
           sprintf(response,
@@ -168,35 +256,63 @@ void handle_request(int client_socket){
         }
         else{
           status_code=200;
+          char * content_type = get_content_type(filename);
+          //read in binary to support all files
+          fseek(fp, 0, SEEK_END);
+          file_size = ftell(fp);
+          rewind(fp);
+          file_buffer = malloc(file_size);
+          fread(file_buffer, 1, file_size, fp);
 
-          char file_buffer[8192];
-          int bytes = fread(file_buffer,1,sizeof(file_buffer),file);
-          file_buffer[bytes] = '\0';
-          fclose(file);
+          file = 1;
+          fclose(fp);
 
           sprintf(response,
           "HTTP/1.1 %d OK\r\n"
           "Content-Type: %s\r\n"
+          "Content-Length: %ld\r\n"
+          "Connection: %s\r\n"
+          "\r\n"
+          ,status_code,content_type,file_size,conn_header);
+        }
+      }
+      }
+    }
+    //POST check
+    else if(method!=NULL && strcmp(method,"POST")==0){
+      //Endpoint check
+      if(path!=NULL && strcmp(path,"/submit")==0){
+        pthread_mutex_lock(&lock);
+        //Critical Section
+        //Storage Check
+        if(total_data<STORAGE_SIZE){
+          storage[total_data].id = next_id;
+          strcpy(storage[total_data].data,post_data);
+          char body[512];
+          sprintf(body,"Stored with ID: %d",next_id);
+          status_code=200;
+          sprintf(response,
+          "HTTP/1.1 %d OK\r\n"
+          "Content-Type: text/plain\r\n"
           "Content-Length: %zu\r\n"
           "Connection: %s\r\n"
           "\r\n"
-          "%s"
-          ,status_code,content_type,strlen(file_buffer),conn_header,file_buffer);
+          "%s",status_code,strlen(body),conn_header,body);
+          total_data++;
+          next_id++;
         }
-      }
-    }
-    //POST
-    else if(method!=NULL && strcmp(method,"POST")==0){
-      if(path!=NULL && strcmp(path,"/submit")==0){
-              printf("I work %s\n",post_data);
-        status_code=200;
-        sprintf(response,
-        "HTTP/1.1 %d OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "Data received: %s",status_code,strlen("Data received: ")+strlen(post_data),conn_header,post_data);
+        else{
+          status_code=507;
+          sprintf(response,
+            "HTTP/1.1 %d Insufficient Storage\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: %s\r\n"
+            "\r\n"
+            "Storage Full"
+            ,status_code,strlen("Storage Full"),conn_header);
+        }
+        pthread_mutex_unlock(&lock);
       }
       else{
         status_code=404;
@@ -218,6 +334,10 @@ void handle_request(int client_socket){
     
 
     send(client_socket,response,strlen(response),0);// 0 => flags , no special behaviour
+    if(file){ 
+      send(client_socket, file_buffer, file_size, 0);
+      free(file_buffer);
+    }
 
     //Log request
     log_request(method,path,status_code);

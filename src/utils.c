@@ -25,6 +25,8 @@ char* get_content_type(char *filename){
       return "text/css";
     }else if(strcmp(ext,".js")==0){
       return "application/javascript";
+    }else if(strcmp(ext,".ico")==0){
+      return "image/x-icon";
     }
   }
 

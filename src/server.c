@@ -4,6 +4,19 @@
 #include <arpa/inet.h>
 #include "server.h"
 #include "http.h"
+#include <pthread.h>
+
+// since threads share memory we need a unique copy of client socket 
+void* thread_handler(void* arg){
+  int client_socket = *(int*)arg; //make arg pointer to int then dereference it
+  free(arg); //free arg as no longer needed
+
+  handle_request(client_socket);
+
+  //Close socket after handling request
+  close(client_socket);
+  return NULL;
+}
 
 void start_server(int port){
   int server_fd;
@@ -46,27 +59,21 @@ void start_server(int port){
     //Accept connection from client
     client_socket = accept(server_fd,(struct sockaddr*) &address, (socklen_t *)&addrlen);
 
-    //Concurrency via fork 
-    int pid = fork();
-
-    if(pid>0){
-      //Parent closes client socket and continues listening
-      close(client_socket);
-      continue;
-    }
-    else if(pid==0){
-      //Child handles request
-      if(client_socket<0){
+    if(client_socket<0){
         perror("Accept");
         exit(EXIT_FAILURE);
-      }
-
-      handle_request(client_socket);
-
-      //Close socket after handling request
-      close(client_socket);
-      exit(0);
     }
+
+    //Concurrency via thread
+    int* arg = malloc(sizeof(int));
+    *arg = client_socket;
+
+    pthread_t tid;
+    pthread_create(&tid,NULL,thread_handler,(void*)arg);
+
+    //ensure the worker thread runs seperately from main thread
+    pthread_detach(tid);
+
   }
 
   close(server_fd);
