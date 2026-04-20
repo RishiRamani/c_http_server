@@ -132,9 +132,7 @@ void handle_request(int client_socket){
     }
     else{
       status_code = 405;
-      sprintf(response,
-        "HTTP/1.1 405 Method Not Allowed\r\n"
-        "Connection: %s\r\n\r\n", conn_header);
+      build_json_response(response, status_code, "Method Not Allowed", conn_header);
     }
     
 

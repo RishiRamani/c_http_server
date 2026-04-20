@@ -19,65 +19,46 @@ void handle_get(char* path, char* response, char* conn_header){
     if(id!=NULL){
       id+=4;
       int ID = atoi(id);
-      int foundid = -1;
-      pthread_mutex_lock(&lock);
-      //Simple search due to small storage
-      for(int i=0;i<total_data;i++){
-        if(storage[i].id==ID){
-          foundid = i;
-          break;
-        }
-      }
-      pthread_mutex_unlock(&lock);
-      if(foundid==-1){
+      char body[BODY_LINE_SIZE];
+      if(get_by_id(ID, body) == -1){
         status_code=404;
-        sprintf(response,
-        "HTTP/1.1 %d Not Found\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "Item Not Found"
-        ,status_code,strlen("Item Not Found"),conn_header);
+        build_json_response(response, status_code, "Item Not Found", conn_header);
       }
       else{
         status_code=200;
-        char body[BODY_LINE_SIZE];
-        pthread_mutex_lock(&lock);
-        sprintf(body,"%d : %s",storage[foundid].id,storage[foundid].data);
-        pthread_mutex_unlock(&lock);
-        sprintf(response,
-        "HTTP/1.1 %d OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "%s"
-        ,status_code,strlen(body),conn_header,body);
+        char json_data[BODY_LINE_SIZE];
+        sprintf(json_data, "{\"id\":%d,\"data\":\"%s\"}", ID, body + strlen("1 : "));
+        build_json_response_with_data(response, status_code, json_data, conn_header);
       }
     }else{
       status_code=200;
       char body[RESPONSE_BODY_SIZE] ="";
-      pthread_mutex_lock(&lock);
-      if(total_data==0){
-        sprintf(body,"No data available");
+      int count = get_all(body);
+      if(count==0){
+        strcpy(body, "[]");
       }
       else{
-        for(int i=0;i<total_data;i++){
-          char line[BODY_LINE_SIZE];
-          sprintf(line,"%d : %s\n",storage[i].id,storage[i].data);
-          strcat(body,line);
+        char json_array[RESPONSE_BODY_SIZE];
+        strcpy(json_array, "[");
+        char* line = strtok(body, "\n");
+        int first = 1;
+        while(line != NULL && strlen(line) > 0){
+          if(!first) strcat(json_array, ",");
+          char* colon = strstr(line, " : ");
+          if(colon != NULL){
+            int item_id = atoi(line);
+            char* data = colon + 3;
+            char json_obj[BODY_LINE_SIZE];
+            sprintf(json_obj, "{\"id\":%d,\"data\":\"%s\"}", item_id, data);
+            strcat(json_array, json_obj);
+            first = 0;
+          }
+          line = strtok(NULL, "\n");
         }
+        strcat(json_array, "]");
+        strcpy(body, json_array);
       }
-      pthread_mutex_unlock(&lock);
-      sprintf(response,
-      "HTTP/1.1 %d OK\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "%s"
-      ,status_code,strlen(body),conn_header,body);
+      build_json_response_with_data(response, status_code, body, conn_header);
     }
   }else{
     if(path!=NULL && strcmp(path,"/")==0){
@@ -86,14 +67,7 @@ void handle_get(char* path, char* response, char* conn_header){
 
     if(file==NULL){
       status_code=404;
-      sprintf(response,
-      "HTTP/1.1 %d Not Found\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "File not found"
-      ,status_code,strlen("Page not found"),conn_header);
+      build_json_response(response, status_code, "File not found", conn_header);
     }
     else{
       char file_buffer[RESPONSE_BODY_SIZE];
@@ -127,15 +101,7 @@ void handle_get(char* path, char* response, char* conn_header){
 
     if(fp==NULL){
       status_code=404;
-      //filename not in server so return page not found
-      sprintf(response,
-      "HTTP/1.1 %d Not Found\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "Page not found"
-      ,status_code,strlen("Page not found"),conn_header);
+      build_json_response(response, status_code, "File not found", conn_header);
     }
     else{
       status_code=200;
@@ -166,48 +132,21 @@ void handle_get(char* path, char* response, char* conn_header){
 void handle_post(char* path, char* response, char* conn_header, char* post_data){
   //Endpoint check
   if(path!=NULL && strcmp(path,"/submit")==0){
-    pthread_mutex_lock(&lock);
-    //Critical Section
-    //Storage Check
     if(total_data<STORAGE_SIZE){
-      storage[total_data].id = next_id;
-      strcpy(storage[total_data].data,post_data);
-      char body[BODY_LINE_SIZE];
-      sprintf(body,"Stored with ID: %d",next_id);
-      status_code=200;
-      sprintf(response,
-      "HTTP/1.1 %d OK\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "%s",status_code,strlen(body),conn_header,body);
-      total_data++;
-      next_id++;
+      int new_id = add_data(post_data);
+      status_code=201;
+      char json_data[BODY_LINE_SIZE];
+      sprintf(json_data, "{\"id\":%d,\"message\":\"Data stored successfully\"}", new_id);
+      build_json_response_with_data(response, status_code, json_data, conn_header);
     }
     else{
       status_code=507;
-      sprintf(response,
-        "HTTP/1.1 %d Insufficient Storage\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "Storage Full"
-        ,status_code,strlen("Storage Full"),conn_header);
+      build_json_response(response, status_code, "Storage Full", conn_header);
     }
-    pthread_mutex_unlock(&lock);
   }
   else{
     status_code=404;
-    sprintf(response,
-      "HTTP/1.1 %d Not Found\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "Invalid Post Route"
-      ,status_code,strlen("Invalid Post Route"),conn_header);
+    build_json_response(response, status_code, "Invalid POST route", conn_header);
   }
 }
 
@@ -218,69 +157,24 @@ void handle_delete(char* path, char* response, char* conn_header){
     if(id!=NULL){
       id+=4;
       int ID = atoi(id);
-      int foundid = -1;
-      pthread_mutex_lock(&lock);
-      //Simple search due to small storage
-      for(int i=0;i<total_data;i++){
-        if(storage[i].id==ID){
-          foundid = i;
-          break;
-        }
-      }
-      if(foundid==-1){
+      if(delete_by_id(ID) == -1){
         status_code=404;
-        sprintf(response,
-        "HTTP/1.1 %d Not Found\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "Item Not Found"
-        ,status_code,strlen("Item Not Found"),conn_header);
+        build_json_response(response, status_code, "Item Not Found", conn_header);
       }
       else{
-        //removal of data and compaction
-        for(int i=foundid;i<total_data-1;i++){
-          storage[i]=storage[i+1];
-        }
-        total_data--;
-        status_code=204;
-        sprintf(response,
-        "HTTP/1.1 %d No Content\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: 0\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        ,status_code,conn_header);
+        status_code=200;
+        build_json_response(response, status_code, "Item deleted successfully", conn_header);
       }
-      pthread_mutex_unlock(&lock);
     }
     else{
-      //deleteall
-      pthread_mutex_lock(&lock);
-      total_data=0;
-      pthread_mutex_unlock(&lock);
-      status_code=204;
-      sprintf(response,
-      "HTTP/1.1 %d No Content\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: 0\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      ,status_code,conn_header);
+      delete_all();
+      status_code=200;
+      build_json_response(response, status_code, "All data deleted successfully", conn_header);
     }
   }
-  
   else{
     status_code=404;
-    sprintf(response,
-    "HTTP/1.1 %d Not Found\r\n"
-    "Content-Type: text/plain\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: %s\r\n"
-    "\r\n"
-    "Page not found"
-    ,status_code,strlen("Page not found"),conn_header);
+    build_json_response(response, status_code, "Invalid DELETE route", conn_header);
   }
 }
 
@@ -291,62 +185,22 @@ void handle_put(char* path, char* response, char* conn_header, char* post_data){
     if(id!=NULL){
       id+=4;
       int ID = atoi(id);
-      int foundid = -1;
-      pthread_mutex_lock(&lock);
-      //Simple search due to small storage
-      for(int i=0;i<total_data;i++){
-        if(storage[i].id==ID){
-          foundid = i;
-          break;
-        }
-      }
-      if(foundid==-1){
+      if(update_by_id(ID, post_data) == -1){
         status_code=404;
-        sprintf(response,
-        "HTTP/1.1 %d Not Found\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "Item Not Found"
-        ,status_code,strlen("Item Not Found"),conn_header);
+        build_json_response(response, status_code, "Item Not Found", conn_header);
       }
       else{
-        //updation
-        strcpy(storage[foundid].data,post_data);
         status_code=200;
-        char body[BODY_LINE_SIZE];
-        sprintf(body,"Item with ID : %d updated",ID);
-        sprintf(response,
-        "HTTP/1.1 %d OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: %s\r\n"
-        "\r\n"
-        "%s"
-        ,status_code,strlen(body),conn_header,body);
+        char json_data[BODY_LINE_SIZE];
+        sprintf(json_data, "{\"id\":%d,\"message\":\"Item updated successfully\"}", ID);
+        build_json_response_with_data(response, status_code, json_data, conn_header);
       }
-      pthread_mutex_unlock(&lock);
     }else{
       status_code=400;
-      sprintf(response,
-      "HTTP/1.1 %d Bad Request\r\n"
-      "Content-Type: text/plain\r\n"
-      "Content-Length: %zu\r\n"
-      "Connection: %s\r\n"
-      "\r\n"
-      "The ID Field is Required"
-      ,status_code,strlen("The ID Field is Required"),conn_header);
+      build_json_response(response, status_code, "The ID field is required", conn_header);
     }
   }else{
     status_code=404;
-    sprintf(response,
-    "HTTP/1.1 %d Not Found\r\n"
-    "Content-Type: text/plain\r\n"
-    "Content-Length: %zu\r\n"
-    "Connection: %s\r\n"
-    "\r\n"
-    "Page not found"
-    ,status_code,strlen("Page not found"),conn_header);
+    build_json_response(response, status_code, "Invalid PUT route", conn_header);
   }
 }
