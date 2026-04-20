@@ -1,12 +1,9 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
-
-SRC = src/main.c src/server.c src/http.c src/utils.c
+CFLAGS = -Wall -pthread
+SRC = src/main.c src/server.c src/http.c src/handlers.c src/storage.c src/utils.c
 OUT = server
 
-all: $(OUT)
-
-$(OUT): $(SRC)
+all:
 	$(CC) $(CFLAGS) $(SRC) -o $(OUT)
 
 clean:

@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "utils.h"
+#include "include/utils.h"
+#include "include/config.h"
 
 //Logs request with timestamp
 void log_request(char *method, char *path, int status_code){
   time_t request_time = time(NULL);
   struct tm *tm_info = localtime(&request_time);
 
-  char time_str[100];
+  char time_str[TIME_STR_SIZE];
   strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
 
   printf("[%s] %s %s %d\n",time_str,method,path,status_code);

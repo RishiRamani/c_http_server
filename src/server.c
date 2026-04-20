@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "server.h"
-#include "http.h"
+#include "include/server.h"
+#include "include/http.h"
 #include <pthread.h>
 
 // since threads share memory we need a unique copy of client socket 
